@@ -38,8 +38,21 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(msg.get("commands.player-only"));
                 return true;
             }
-            boolean visible = plugin.getAuraManager().toggleAuraVisibility(player);
-            player.sendMessage(visible ? msg.get("toggle.visible") : msg.get("toggle.hidden"));
+
+            String toggleOption = args.length > 1 ? args[1].toLowerCase() : "all";
+
+            if (toggleOption.equals("self")) {
+                boolean hidden = plugin.getAuraManager().toggleSelf(player);
+                player.sendMessage(hidden ? msg.get("toggle.self-hidden") : msg.get("toggle.self-visible"));
+            } else if (toggleOption.equals("others") || toggleOption.equals("other")) {
+                boolean hidden = plugin.getAuraManager().toggleOthers(player);
+                player.sendMessage(hidden ? msg.get("toggle.others-hidden") : msg.get("toggle.others-visible"));
+            } else if (toggleOption.equals("all")) {
+                boolean hidden = plugin.getAuraManager().toggleAll(player);
+                player.sendMessage(hidden ? msg.get("toggle.all-hidden") : msg.get("toggle.all-visible"));
+            } else {
+                sender.sendMessage(msg.get("commands.usage"));
+            }
             return true;
         }
 
@@ -152,9 +165,15 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("aura.admin")) {
                 completions.add("reload");
             }
-        } else if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("temp"))) {
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                completions.add(p.getName());
+        } else if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("toggle")) {
+                completions.add("self");
+                completions.add("others");
+                completions.add("all");
+            } else if (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("temp")) {
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    completions.add(p.getName());
+                }
             }
         } else if (args.length == 3 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("temp"))) {
             completions.addAll(plugin.getAuraConfigs().keySet());
