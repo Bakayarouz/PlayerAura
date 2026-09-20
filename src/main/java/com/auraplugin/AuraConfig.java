@@ -3,6 +3,7 @@ package com.auraplugin;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -15,6 +16,7 @@ import java.util.List;
 
 public class AuraConfig {
     private final String id;
+    private final String displayName;
     private final Material material;
     private final List<NamespacedKey> frames;
     private final int frameDelay;
@@ -28,6 +30,10 @@ public class AuraConfig {
 
     public AuraConfig(String id, ConfigurationSection section) {
         this.id = id.toLowerCase();
+        
+        String rawDisplayName = section.getString("display-name", this.id);
+        this.displayName = ChatColor.translateAlternateColorCodes('&', rawDisplayName);
+        
         this.material = Material.matchMaterial(section.getString("material", "PAPER"));
         
         this.frames = new ArrayList<>();
@@ -108,6 +114,7 @@ public class AuraConfig {
     }
 
     public String getId() { return id; }
+    public String getDisplayName() { return displayName; }
     public Material getMaterial() { return material != null ? material : Material.PAPER; }
     public List<NamespacedKey> getFrames() { return frames; }
     public int getFrameDelay() { return frameDelay; }
