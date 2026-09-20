@@ -46,10 +46,12 @@ public class AuraManager {
         player.getPersistentDataContainer().set(auraPdcKey, PersistentDataType.STRING, config.getId());
 
         Location loc = player.getLocation();
+        loc.setPitch(0.0f); // Flatten pitch so the orientation starts level
         
         ItemDisplay display = player.getWorld().spawn(loc, ItemDisplay.class, entity -> {
             entity.setPersistent(false); // Safeguard: prevents orphan entities on crash
             entity.setBillboard(config.getBillboard());
+            entity.setRotation(player.getYaw(), 0.0f);
             entity.setTransformation(new Transformation(
                     new Vector3f(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ()),
                     new AxisAngle4f(0, 0, 0, 1),
@@ -61,7 +63,7 @@ public class AuraManager {
         updateDisplayItem(display, config, 0);
         activeAuras.put(uuid, display);
 
-        // Mount as passenger using the original clean mechanics
+        // Mount entity as a passenger to follow player smoothly without teleport spam
         player.addPassenger(display);
 
         if (config.getFrames().size() > 1) {
@@ -193,14 +195,11 @@ public class AuraManager {
         boolean next = !current;
         hideOthers.put(uuid, next);
 
-        Map<UUID, ItemDisplay> snapshot = new HashMap<>(activeAuras);
-        for (Map.Entry<UUID, ItemDisplay> entry : snapshot.entrySet()) {
+        for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
             if (!entry.getKey().equals(uuid)) {
                 ItemDisplay display = entry.getValue();
-                if (display != null && display.isValid()) {
-                    if (next) player.hideEntity(plugin, display);
-                    else player.showEntity(plugin, display);
-                }
+                if (next) player.hideEntity(plugin, display);
+                else player.showEntity(plugin, display);
             }
         }
         return next;
@@ -216,19 +215,16 @@ public class AuraManager {
         hideOthers.put(uuid, targetState);
 
         ItemDisplay myDisplay = activeAuras.get(uuid);
-        if (myDisplay != null && myDisplay.isValid()) {
+        if (myDisplay != null) {
             if (targetState) player.hideEntity(plugin, myDisplay);
             else player.showEntity(plugin, myDisplay);
         }
 
-        Map<UUID, ItemDisplay> snapshot = new HashMap<>(activeAuras);
-        for (Map.Entry<UUID, ItemDisplay> entry : snapshot.entrySet()) {
+        for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
             if (!entry.getKey().equals(uuid)) {
                 ItemDisplay display = entry.getValue();
-                if (display != null && display.isValid()) {
-                    if (targetState) player.hideEntity(plugin, display);
-                    else player.showEntity(plugin, display);
-                }
+                if (targetState) player.hideEntity(plugin, display);
+                else player.showEntity(plugin, display);
             }
         }
         return targetState;
