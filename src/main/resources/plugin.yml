@@ -1,9 +1,22 @@
 name: AuraPlugin
-version: 1.0
+version: '${version}'
 main: com.auraplugin.AuraPlugin
 api-version: '1.21'
+softdepend: [PlaceholderAPI]
+description: A modern player aura plugin utilizing 1.21 display entities and item models.
+
 commands:
   aura:
-    description: Manage cosmetic player auras
-    usage: /aura <set|remove|temp|reload> <player> [aura_id] [seconds]
+    description: Main command for managing player auras.
+    usage: /aura <set|remove|temp|toggle|reload>
     permission: aura.use
+    permission-message: "&cYou do not have permission to execute this command."
+    aliases: [auras]
+
+permissions:
+  aura.admin:
+    description: Grants full administrator access (reload, temporary auras, bypassing permissions).
+    default: op
+  aura.use:
+    description: Grants basic access to use and toggle auras.
+    default: use
