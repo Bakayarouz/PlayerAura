@@ -1,0 +1,19 @@
+prefix: "&8[&6Aura&8] "
+commands:
+  usage: "{prefix}&cUsage: /aura <set|remove|temp|toggle|reload> ..."
+  no-permission: "{prefix}&cYou do not have permission to execute this command."
+  player-only: "{prefix}&cOnly players can execute this command."
+  player-not-found: "{prefix}&cPlayer not found or offline."
+  invalid-aura: "{prefix}&cInvalid aura ID! Available: {auras}"
+  invalid-duration: "{prefix}&cDuration must be a valid number of seconds."
+  reloaded: "{prefix}&aAura configuration and messages reloaded successfully!"
+  
+actions:
+  aura-removed-sender: "{prefix}&aRemoved aura from {target}."
+  aura-set-sender: "{prefix}&aSuccessfully applied aura '{aura}' to {target}."
+  aura-temp-sender: "{prefix}&aApplied temporary aura '{aura}' to {target} for {seconds}s."
+  config-deleted-removal: "{prefix}&eYour aura was removed because its configuration was deleted."
+  
+toggle:
+  visible: "{prefix}&aAuras are now &evisible &aaround other players."
+  hidden: "{prefix}&eAuras are now &chidden &efrom your view."
