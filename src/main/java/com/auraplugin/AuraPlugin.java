@@ -18,15 +18,16 @@ public class AuraPlugin extends JavaPlugin {
         reloadAuraConfig();
 
         AuraCommand cmd = new AuraCommand(this);
-        getCommand("aura").setExecutor(cmd);
-        getCommand("aura").setTabCompleter(cmd);
+        if (getCommand("aura") != null) {
+            getCommand("aura").setExecutor(cmd);
+            getCommand("aura").setTabCompleter(cmd);
+        }
 
         getServer().getPluginManager().registerEvents(new AuraEventListener(this, auraManager), this);
     }
 
     @Override
     public void onDisable() {
-        // Automatically dismounts and removes auras from all online players on server stop/reload
         getServer().getOnlinePlayers().forEach(auraManager::removeAuraDisplayOnly);
     }
 
