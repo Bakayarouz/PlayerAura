@@ -1,75 +1,77 @@
 package com.auraplugin;
 
 import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.entity.Player;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class AuraPlugin extends JavaPlugin {
+public final class AuraPlugin extends JavaPlugin {
 
+    private static AuraPlugin instance;
     private AuraManager auraManager;
     private MessageManager messageManager;
     private final Map<String, AuraConfig> auraConfigs = new HashMap<>();
 
     @Override
     public void onEnable() {
+        instance = this;
         saveDefaultConfig();
+        
         this.messageManager = new MessageManager(this);
         this.auraManager = new AuraManager(this);
-        reloadAuraConfig();
+        
+        loadAuraConfigs();
+
+        getServer().getPluginManager().registerEvents(new AuraEventListener(this), this);
+
+        AuraCommand auraCommand = new AuraCommand(this);
+        if (getCommand("aura") != null) {
+            getCommand("aura").setExecutor(auraCommand);
+            getCommand("aura").setTabCompleter(auraCommand);
+        }
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new AuraPlaceholderExpansion(this).register();
-            getLogger().info("PlaceholderAPI hook established successfully!");
+            getLogger().info("PlaceholderAPI expansion registered successfully!");
         }
 
-        AuraCommand cmd = new AuraCommand(this);
-        if (getCommand("aura") != null) {
-            getCommand("aura").setExecutor(cmd);
-            getCommand("aura").setTabCompleter(cmd);
-        }
-
-        getServer().getPluginManager().registerEvents(new AuraEventListener(this, auraManager), this);
+        getLogger().info("AuraPlugin has been enabled successfully!");
     }
 
     @Override
     public void onDisable() {
-        getServer().getOnlinePlayers().forEach(auraManager::removeAuraDisplayOnly);
+        if (auraManager != null) {
+            auraManager.removeAllAuras();
+        }
+        getLogger().info("AuraPlugin has been disabled.");
     }
 
-    public void reloadAuraConfig() {
-        reloadConfig();
-        messageManager.reloadMessages();
+    public void loadAuraConfigs() {
         auraConfigs.clear();
-        ConfigurationSection section = getConfig().getConfigurationSection("auras");
-        if (section != null) {
-            for (String key : section.getKeys(false)) {
-                ConfigurationSection auraSec = section.getConfigurationSection(key);
-                if (auraSec != null) {
-                    auraConfigs.put(key.toLowerCase(), new AuraConfig(key, auraSec));
-                }
-            }
-        }
-
-        if (auraManager != null) {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                String savedId = player.getPersistentDataContainer().get(auraManager.getPlayerAuraPdcKey(), PersistentDataType.STRING);
-                if (savedId != null) {
-                    if (!auraConfigs.containsKey(savedId.toLowerCase())) {
-                        auraManager.removeAura(player);
-                        player.sendMessage(messageManager.get("actions.config-deleted-removal"));
-                    } else {
-                        auraManager.reapplyStoredAura(player);
+        if (getConfig().isConfigurationSection("auras")) {
+            var section = getConfig().getConfigurationSection("auras");
+            if (section != null) {
+                for (String key : section.getKeys(false)) {
+                    var auraSec = section.getConfigurationSection(key);
+                    if (auraSec != null) {
+                        auraConfigs.put(key.toLowerCase(), new AuraConfig(key, auraSec));
                     }
                 }
             }
         }
+        getLogger().info("Loaded " + auraConfigs.size() + " auras from configuration.");
     }
 
+    public void reloadAuraConfig() {
+        reloadConfig();
+        loadAuraConfigs();
+        if (auraManager != null) {
+            auraManager.validateActiveAurasOnReload();
+        }
+    }
+
+    public static AuraPlugin getInstance() { return instance; }
     public AuraManager getAuraManager() { return auraManager; }
     public MessageManager getMessageManager() { return messageManager; }
     public Map<String, AuraConfig> getAuraConfigs() { return auraConfigs; }
