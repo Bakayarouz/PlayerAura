@@ -23,13 +23,12 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length < 1) {
-            sender.sendMessage("§cUsage: /aura <set|remove|reload> [player] [aura_id]");
+            sender.sendMessage("§cUsage: /aura <set|remove|temp|reload> <player> [aura_id] [seconds]");
             return true;
         }
 
         String subAction = args[0].toLowerCase();
 
-        // Handle reload (Admin only)
         if (subAction.equals("reload")) {
             if (!sender.hasPermission("aura.admin")) {
                 sender.sendMessage("§cYou do not have permission to reload auras.");
@@ -40,10 +39,9 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // Handle /aura set <player> <id> or /aura remove <player>
-        if (subAction.equals("set") || subAction.equals("remove")) {
+        if (subAction.equals("set") || subAction.equals("remove") || subAction.equals("temp")) {
             if (args.length < 2) {
-                sender.sendMessage("§cUsage: /aura " + subAction + " <player> [aura_id]");
+                sender.sendMessage("§cUsage: /aura " + subAction + " <player> [aura_id] [seconds]");
                 return true;
             }
 
@@ -76,7 +74,6 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
 
-                // Check permission: If executed by console or admin, check if target player has permission (or bypass)
                 boolean bypass = sender.hasPermission("aura.admin") || sender.equals(target);
                 if (!bypass && !target.hasPermission(config.getPermission())) {
                     sender.sendMessage("§cThat player does not have permission to use this aura.");
@@ -90,9 +87,41 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+
+            if (subAction.equals("temp")) {
+                if (!sender.hasPermission("aura.admin")) {
+                    sender.sendMessage("§cYou do not have permission to give temporary auras.");
+                    return true;
+                }
+
+                if (args.length < 4) {
+                    sender.sendMessage("§cUsage: /aura temp <player> <aura_id> <seconds>");
+                    return true;
+                }
+
+                String auraId = args[2].toLowerCase();
+                AuraConfig config = plugin.getAuraConfigs().get(auraId);
+                if (config == null) {
+                    sender.sendMessage("§cInvalid aura ID!");
+                    return true;
+                }
+
+                int seconds;
+                try {
+                    seconds = Integer.parseInt(args[3]);
+                } catch (NumberFormatException e) {
+                    sender.sendMessage("§cDuration must be a valid number of seconds.");
+                    return true;
+                }
+
+                plugin.getAuraManager().setTemporaryAura(target, config, seconds);
+                sender.sendMessage("§aApplied temporary aura '" + config.getId() + "' to " + target.getName() + " for " + seconds + "s.");
+                target.sendMessage("§eYou received a temporary aura (" + config.getId() + ") for " + seconds + " seconds!");
+                return true;
+            }
         }
 
-        sender.sendMessage("§cUnknown subcommand. Use /aura set, remove, or reload.");
+        sender.sendMessage("§cUnknown subcommand. Use /aura set, remove, temp, or reload.");
         return true;
     }
 
@@ -103,16 +132,15 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             completions.add("set");
             completions.add("remove");
+            completions.add("temp");
             if (sender.hasPermission("aura.admin")) {
                 completions.add("reload");
             }
-        } else if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove"))) {
-            // Suggest online player names
+        } else if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("temp"))) {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 completions.add(p.getName());
             }
-        } else if (args.length == 3 && args[0].equalsIgnoreCase("set")) {
-            // Suggest available aura IDs from config
+        } else if (args.length == 3 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("temp"))) {
             completions.addAll(plugin.getAuraConfigs().keySet());
         }
 
