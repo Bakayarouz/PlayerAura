@@ -33,7 +33,6 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
 
         String subAction = args[0].toLowerCase();
 
-        // Toggle is open to all players with basic permission
         if (subAction.equals("toggle")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage(msg.get("commands.player-only"));
@@ -57,7 +56,6 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // All other actions (set, remove, temp, reload) are strictly admin / op only
         if (!sender.hasPermission("aura.admin")) {
             sender.sendMessage(msg.get("commands.no-permission"));
             return true;
