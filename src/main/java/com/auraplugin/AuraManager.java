@@ -45,13 +45,15 @@ public class AuraManager {
         UUID uuid = player.getUniqueId();
         player.getPersistentDataContainer().set(auraPdcKey, PersistentDataType.STRING, config.getId());
 
-        Location loc = player.getLocation().add(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ());
+        Location loc = player.getLocation();
+        loc.setPitch(0.0f); // Flatten pitch so the orientation starts level
         
         ItemDisplay display = player.getWorld().spawn(loc, ItemDisplay.class, entity -> {
             entity.setPersistent(false); // Safeguard: prevents orphan entities on crash
             entity.setBillboard(config.getBillboard());
+            entity.setRotation(player.getYaw(), 0.0f);
             entity.setTransformation(new Transformation(
-                    new Vector3f(0, 0, 0),
+                    new Vector3f(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ()),
                     new AxisAngle4f(0, 0, 0, 1),
                     new Vector3f(config.getScale(), config.getScale(), config.getScale()),
                     new AxisAngle4f(0, 0, 0, 1)
@@ -60,6 +62,9 @@ public class AuraManager {
 
         updateDisplayItem(display, config, 0);
         activeAuras.put(uuid, display);
+
+        // Mount entity as a passenger to follow player smoothly without teleport spam
+        player.addPassenger(display);
 
         if (config.getFrames().size() > 1) {
             final BukkitTask[] taskHolder = new BukkitTask[1];
@@ -78,15 +83,6 @@ public class AuraManager {
             }, config.getFrameDelay(), config.getFrameDelay());
             animationTasks.put(uuid, taskHolder[0]);
         }
-
-        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            if (!player.isOnline() || !activeAuras.containsKey(uuid)) {
-                task.cancel();
-                return;
-            }
-            Location targetLoc = player.getLocation().add(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ());
-            display.teleport(targetLoc);
-        }, 0L, 1L);
         
         config.getWhenApplied().execute(player);
     }
@@ -120,7 +116,11 @@ public class AuraManager {
         }
 
         if (activeAuras.containsKey(uuid)) {
-            activeAuras.get(uuid).remove();
+            ItemDisplay display = activeAuras.get(uuid);
+            if (display != null) {
+                player.removePassenger(display);
+                display.remove();
+            }
             activeAuras.remove(uuid);
         }
 
