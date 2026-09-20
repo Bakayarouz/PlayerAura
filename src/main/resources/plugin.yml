@@ -5,5 +5,5 @@ api-version: '1.21'
 commands:
   aura:
     description: Manage cosmetic player auras
-    usage: /aura <set|remove|reload> <player> [aura_id]
+    usage: /aura <set|remove|temp|reload> <player> [aura_id] [seconds]
     permission: aura.use
