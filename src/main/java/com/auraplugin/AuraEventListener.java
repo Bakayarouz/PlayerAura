@@ -29,10 +29,11 @@ public class AuraEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        manager.handlePlayerQuit(event.getPlayer()); // Fix 1 & 4: Deep cleanup on quit
+        manager.handlePlayerQuit(event.getPlayer());
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    // Fix 4: Immediate cleanup on death to avoid ghost entities or item drop issues
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerDeath(PlayerDeathEvent event) {
         manager.removeAuraDisplayOnly(event.getEntity());
     }
@@ -50,7 +51,6 @@ public class AuraEventListener implements Listener {
         manager.reapplyStoredAura(event.getPlayer());
     }
 
-    // Fix 2: Handle generic/long teleports to prevent desynchronization of passenger mounts
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
@@ -68,6 +68,7 @@ public class AuraEventListener implements Listener {
         }
     }
 
+    // Fix 1: Instant reaction to invisibility status
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPotionEffect(EntityPotionEffectEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
