@@ -1,6 +1,7 @@
 package com.auraplugin;
 
 import org.bukkit.Color;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
@@ -20,52 +21,39 @@ public class AuraManager {
 
     private final AuraPlugin plugin;
     private final NamespacedKey playerAuraPdcKey;
-    private final NamespacedKey entityTagKey;
     private final Map<UUID, ItemDisplay> activeAuras = new HashMap<>();
 
     public AuraManager(AuraPlugin plugin) {
         this.plugin = plugin;
-        // Key saved on the PLAYER to remember their selected cosmetic
         this.playerAuraPdcKey = new NamespacedKey(plugin, "selected_aura_id");
-        // Key saved on the ENTITY for cleanup tracking
-        this.entityTagKey = new NamespacedKey(plugin, "aura_display_entity");
     }
 
-    /**
-     * User equips a new aura cosmetic. Saves selection to Player PDC.
-     */
     public void setAura(Player player, AuraConfig config) {
-        // Save cosmetic selection persistently to player PDC
         player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, config.getId());
         spawnAuraDisplay(player, config);
     }
 
-    /**
-     * User explicitly removes their aura via command. Clears selection from Player PDC.
-     */
     public void removeAura(Player player) {
         player.getPersistentDataContainer().remove(playerAuraPdcKey);
         removeAuraDisplayOnly(player);
     }
 
-    /**
-     * Re-applies the saved aura from PDC if present (used for join/respawn/world change).
-     */
     public void reapplyStoredAura(Player player) {
-        String savedAuraId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-        if (savedAuraId == null) return;
+        String savedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
+        if (savedId == null) return;
 
-        AuraConfig config = plugin.getAuraConfigs().get(savedAuraId.toLowerCase());
+        AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
         if (config != null && player.hasPermission(config.getPermission())) {
             spawnAuraDisplay(player, config);
         }
     }
 
-    /**
-     * Internal helper to spawn and mount the entity without altering saved player data.
-     */
     private void spawnAuraDisplay(Player player, AuraConfig config) {
-        removeAuraDisplayOnly(player); // Clean up existing entity if present
+        removeAuraDisplayOnly(player);
+
+        // 1. Prepare location: Use body location and strip pitch so it mounts perfectly upright
+        Location spawnLoc = player.getLocation().clone();
+        spawnLoc.setPitch(0); // Flattens pitch at the exact moment of mounting
 
         ItemStack item = new ItemStack(config.getMaterial());
         ItemMeta meta = item.getItemMeta();
@@ -74,13 +62,16 @@ public class AuraManager {
             item.setItemMeta(meta);
         }
 
-        ItemDisplay display = player.getWorld().spawn(player.getLocation(), ItemDisplay.class, entity -> {
+        ItemDisplay display = player.getWorld().spawn(spawnLoc, ItemDisplay.class, entity -> {
             entity.setItemStack(item);
             entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
-            entity.setBillboard(config.getBillboard());
+            
+            // 2. Billboard VERTICAL keeps the face perpendicular to the horizon
+            entity.setBillboard(Display.Billboard.VERTICAL);
             entity.setBrightness(new Display.Brightness(15, 15));
             entity.setShadowRadius(0.0f);
 
+            // 3. Set transformation matrix offset and scale
             Transformation transform = new Transformation(
                     new Vector3f(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ()),
                     new AxisAngle4f(0.0f, 0.0f, 1.0f, 0.0f),
@@ -88,17 +79,13 @@ public class AuraManager {
                     new AxisAngle4f(0.0f, 0.0f, 1.0f, 0.0f)
             );
             entity.setTransformation(transform);
-            entity.setTeleportDuration(1);
         });
 
+        // 4. Mount as passenger
         player.addPassenger(display);
-        display.getPersistentDataContainer().set(entityTagKey, PersistentDataType.STRING, player.getUniqueId().toString());
         activeAuras.put(player.getUniqueId(), display);
     }
 
-    /**
-     * Removes only the display entity (on death, quit, world change) while preserving player selection in PDC.
-     */
     public void removeAuraDisplayOnly(Player player) {
         ItemDisplay display = activeAuras.remove(player.getUniqueId());
         if (display != null && display.isValid()) {
