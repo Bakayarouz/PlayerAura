@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class AuraPlugin extends JavaPlugin {
+
     private AuraManager auraManager;
     private final Map<String, AuraConfig> auraConfigs = new HashMap<>();
 
@@ -20,12 +21,14 @@ public class AuraPlugin extends JavaPlugin {
         getCommand("aura").setExecutor(cmd);
         getCommand("aura").setTabCompleter(cmd);
 
-        getServer().getPluginManager().registerEvents(new AuraEventListener(auraManager), this);
+        // Fixed: Pass 'this' as the first argument to match AuraEventListener(AuraPlugin, AuraManager)
+        getServer().getPluginManager().registerEvents(new AuraEventListener(this, auraManager), this);
     }
 
     @Override
     public void onDisable() {
-        getServer().getOnlinePlayers().forEach(auraManager::removeAura);
+        // Clean up active entities on plugin disable/reload
+        getServer().getOnlinePlayers().forEach(auraManager::removeAuraDisplayOnly);
     }
 
     public void reloadAuraConfig() {
