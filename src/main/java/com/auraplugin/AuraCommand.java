@@ -1,14 +1,16 @@
 package com.auraplugin;
 
-import org.bukkit.ChatColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class AuraCommand implements CommandExecutor, TabCompleter {
 
@@ -19,110 +21,104 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be executed by a player.");
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (args.length < 1) {
+            sender.sendMessage("§cUsage: /aura <set|remove|reload> [player] [aura_id]");
             return true;
         }
 
-        if (args.length == 0) {
-            player.sendMessage(ChatColor.YELLOW + "Usage: /aura <set|remove|list|reload> [aura_id]");
+        String subAction = args[0].toLowerCase();
+
+        // Handle reload (Admin only)
+        if (subAction.equals("reload")) {
+            if (!sender.hasPermission("aura.admin")) {
+                sender.sendMessage("§cYou do not have permission to reload auras.");
+                return true;
+            }
+            plugin.reloadAuraConfig();
+            sender.sendMessage("§aAura configuration reloaded successfully!");
             return true;
         }
 
-        String sub = args[0].toLowerCase();
-
-        switch (sub) {
-            case "remove", "off" -> {
-                // Clears Player PDC selection and removes display entity
-                plugin.getAuraManager().removeAura(player);
-                player.sendMessage(ChatColor.RED + "Aura cosmetic removed.");
+        // Handle /aura set <player> <id> or /aura remove <player>
+        if (subAction.equals("set") || subAction.equals("remove")) {
+            if (args.length < 2) {
+                sender.sendMessage("§cUsage: /aura " + subAction + " <player> [aura_id]");
                 return true;
             }
 
-            case "reload" -> {
-                if (!player.hasPermission("aura.admin")) {
-                    player.sendMessage(ChatColor.RED + "You do not have permission to reload the configuration.");
-                    return true;
-                }
-                plugin.reloadAuraConfig();
-                player.sendMessage(ChatColor.GREEN + "Aura configuration reloaded successfully!");
+            Player target = Bukkit.getPlayer(args[1]);
+            if (target == null || !target.isOnline()) {
+                sender.sendMessage("§cPlayer not found or offline.");
                 return true;
             }
 
-            case "list" -> {
-                player.sendMessage(ChatColor.GOLD + "=== Available Auras ===");
-                boolean foundAny = false;
-                for (AuraConfig cfg : plugin.getAuraConfigs().values()) {
-                    if (player.hasPermission(cfg.getPermission())) {
-                        player.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-                                " - " + cfg.getDisplayName() + " &7(" + cfg.getId() + ")"));
-                        foundAny = true;
-                    }
-                }
-                if (!foundAny) {
-                    player.sendMessage(ChatColor.GRAY + "You do not have permission for any available auras.");
+            if (subAction.equals("remove")) {
+                plugin.getAuraManager().removeAura(target);
+                sender.sendMessage("§aRemoved aura from " + target.getName());
+                if (sender != target) {
+                    target.sendMessage("§eYour aura has been removed.");
                 }
                 return true;
             }
 
-            case "set" -> {
-                if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /aura set <aura_id>");
+            if (subAction.equals("set")) {
+                if (args.length < 3) {
+                    sender.sendMessage("§cUsage: /aura set <player> <aura_id>");
                     return true;
                 }
 
-                String auraId = args[1].toLowerCase();
-                AuraConfig cfg = plugin.getAuraConfigs().get(auraId);
+                String auraId = args[2].toLowerCase();
+                AuraConfig config = plugin.getAuraConfigs().get(auraId);
 
-                if (cfg == null) {
-                    player.sendMessage(ChatColor.RED + "Aura '" + auraId + "' does not exist.");
+                if (config == null) {
+                    sender.sendMessage("§cInvalid aura ID! Available: " + String.join(", ", plugin.getAuraConfigs().keySet()));
                     return true;
                 }
 
-                if (!player.hasPermission(cfg.getPermission())) {
-                    player.sendMessage(ChatColor.RED + "You do not have permission to use this aura!");
+                // Check permission: If executed by console or admin, check if target player has permission (or bypass)
+                boolean bypass = sender.hasPermission("aura.admin") || sender.equals(target);
+                if (!bypass && !target.hasPermission(config.getPermission())) {
+                    sender.sendMessage("§cThat player does not have permission to use this aura.");
                     return true;
                 }
 
-                // Saves selection to Player PDC & mounts display entity
-                plugin.getAuraManager().setAura(player, cfg);
-                player.sendMessage(ChatColor.GREEN + "Equipped cosmetic: " + 
-                        ChatColor.translateAlternateColorCodes('&', cfg.getDisplayName()));
-                return true;
-            }
-
-            default -> {
-                player.sendMessage(ChatColor.RED + "Unknown subcommand. Use /aura <set|remove|list|reload>");
+                plugin.getAuraManager().setAura(target, config);
+                sender.sendMessage("§aSuccessfully applied aura '" + config.getId() + "' to " + target.getName());
+                if (sender != target) {
+                    target.sendMessage("§aYou have been equipped with the '" + config.getId() + "' aura!");
+                }
                 return true;
             }
         }
+
+        sender.sendMessage("§cUnknown subcommand. Use /aura set, remove, or reload.");
+        return true;
     }
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            String input = args[0].toLowerCase();
-            List<String> subcommands = new ArrayList<>(List.of("set", "remove", "list"));
+            completions.add("set");
+            completions.add("remove");
             if (sender.hasPermission("aura.admin")) {
-                subcommands.add("reload");
+                completions.add("reload");
             }
-            for (String sub : subcommands) {
-                if (sub.startsWith(input)) {
-                    completions.add(sub);
-                }
+        } else if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove"))) {
+            // Suggest online player names
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                completions.add(p.getName());
             }
-        } else if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
-            String input = args[1].toLowerCase();
-            for (AuraConfig cfg : plugin.getAuraConfigs().values()) {
-                if (sender.hasPermission(cfg.getPermission()) && cfg.getId().startsWith(input)) {
-                    completions.add(cfg.getId());
-                }
-            }
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("set")) {
+            // Suggest available aura IDs from config
+            completions.addAll(plugin.getAuraConfigs().keySet());
         }
 
-        return completions;
+        String currentArg = args[args.length - 1].toLowerCase();
+        return completions.stream()
+                .filter(s -> s.toLowerCase().startsWith(currentArg))
+                .collect(Collectors.toList());
     }
 }
