@@ -29,7 +29,7 @@ public class AuraEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        manager.removeAuraDisplayOnly(event.getPlayer());
+        manager.handlePlayerQuit(event.getPlayer()); // Fix 1 & 4: Deep cleanup on quit
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -48,6 +48,14 @@ public class AuraEventListener implements Listener {
     public void onWorldChange(PlayerChangedWorldEvent event) {
         manager.removeAuraDisplayOnly(event.getPlayer());
         manager.reapplyStoredAura(event.getPlayer());
+    }
+
+    // Fix 2: Handle generic/long teleports to prevent desynchronization of passenger mounts
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        manager.removeAuraDisplayOnly(player);
+        plugin.getServer().getScheduler().runTask(plugin, () -> manager.reapplyStoredAura(player));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
