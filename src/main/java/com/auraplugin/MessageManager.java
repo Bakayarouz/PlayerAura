@@ -1,11 +1,11 @@
 package com.auraplugin;
 
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -29,28 +29,31 @@ public class MessageManager {
         }
         messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
 
-        InputStream defStream = plugin.getResource("messages.yml");
-        if (defStream != null) {
-            YamlConfiguration defConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defStream, StandardCharsets.UTF_8));
+        try (InputStreamReader defConfigStream = new InputStreamReader(
+                plugin.getResource("messages.yml"), StandardCharsets.UTF_8)) {
+            YamlConfiguration defConfig = YamlConfiguration.loadConfiguration(defConfigStream);
             messagesConfig.setDefaults(defConfig);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Could not load default messages.yml");
         }
     }
 
-    public String get(String path, Map<String, String> placeholders) {
+    public Component get(String path) {
+        return get(path, null);
+    }
+
+    public Component get(String path, Map<String, String> placeholders) {
         String prefix = messagesConfig.getString("prefix", "&8[&6Aura&8] ");
-        String message = messagesConfig.getString(path, "&cMissing message path: " + path);
-        
+        String message = messagesConfig.getString(path, "&cMissing message: " + path);
+
         message = message.replace("{prefix}", prefix);
-        
+
         if (placeholders != null) {
             for (Map.Entry<String, String> entry : placeholders.entrySet()) {
                 message = message.replace("{" + entry.getKey() + "}", entry.getValue());
             }
         }
-        return ChatColor.translateAlternateColorCodes('&', message);
-    }
 
-    public String get(String path) {
-        return get(path, null);
+        return LegacyComponentSerializer.legacy('&').deserialize(message);
     }
 }
