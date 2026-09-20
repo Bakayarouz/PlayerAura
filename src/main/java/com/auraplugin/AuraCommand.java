@@ -23,11 +23,25 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length < 1) {
-            sender.sendMessage("§cUsage: /aura <set|remove|temp|reload> <player> [aura_id] [seconds]");
+            sender.sendMessage("§cUsage: /aura <set|remove|temp|toggle|reload> ...");
             return true;
         }
 
         String subAction = args[0].toLowerCase();
+
+        if (subAction.equals("toggle")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cOnly players can toggle aura visibility.");
+                return true;
+            }
+            boolean visible = plugin.getAuraManager().toggleAuraVisibility(player);
+            if (visible) {
+                player.sendMessage("§aAuras are now §evisible §aaround other players.");
+            } else {
+                player.sendMessage("§eAuras are now §chidden §efrom your view.");
+            }
+            return true;
+        }
 
         if (subAction.equals("reload")) {
             if (!sender.hasPermission("aura.admin")) {
@@ -121,7 +135,7 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        sender.sendMessage("§cUnknown subcommand. Use /aura set, remove, temp, or reload.");
+        sender.sendMessage("§cUnknown subcommand. Use /aura set, remove, temp, toggle, or reload.");
         return true;
     }
 
@@ -133,6 +147,7 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             completions.add("set");
             completions.add("remove");
             completions.add("temp");
+            completions.add("toggle");
             if (sender.hasPermission("aura.admin")) {
                 completions.add("reload");
             }
