@@ -15,8 +15,8 @@ commands:
 
 permissions:
   aura.admin:
-    description: Grants full administrator access (reload, temporary auras, bypassing permissions).
+    description: Grants full administrator access (set, remove, temp, reload).
     default: op
   aura.use:
-    description: Grants basic access to use and toggle auras.
-    default: use
+    description: Grants basic access to use the /aura toggle command.
+    default: true
