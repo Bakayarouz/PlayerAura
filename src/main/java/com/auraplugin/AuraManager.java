@@ -28,8 +28,6 @@ public class AuraManager {
     
     private final Map<UUID, BukkitTask> animationTasks = new HashMap<>();
     private final Map<UUID, Integer> frameIndices = new HashMap<>();
-    
-    // Tracks players who have toggled off seeing auras (Fix 3)
     private final Set<UUID> auraVisibilityDisabled = new HashSet<>();
 
     public AuraManager(AuraPlugin plugin) {
@@ -41,10 +39,6 @@ public class AuraManager {
         return playerAuraPdcKey;
     }
 
-    /**
-     * Toggles whether a player can see other players' auras. (Fix 3)
-     * @return true if auras are now visible, false if hidden.
-     */
     public boolean toggleAuraVisibility(Player player) {
         UUID uuid = player.getUniqueId();
         if (auraVisibilityDisabled.contains(uuid)) {
@@ -66,12 +60,21 @@ public class AuraManager {
         }
     }
 
-    public void setAura(Player player, AuraConfig config) {
+    public void setAura(Player player, AuraConfig newConfig) {
+        String oldSavedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
+        if (oldSavedId != null) {
+            AuraConfig oldConfig = plugin.getAuraConfigs().get(oldSavedId.toLowerCase());
+            if (oldConfig != null && !oldConfig.getId().equals(newConfig.getId())) {
+                oldConfig.getWhenDisabled().execute(player);
+            }
+        }
+
         clearTempTask(player.getUniqueId());
         hijackedAuraBackups.remove(player.getUniqueId());
 
-        player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, config.getId());
-        spawnAuraDisplay(player, config);
+        player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, newConfig.getId());
+        spawnAuraDisplay(player, newConfig);
+        newConfig.getWhenApplied().execute(player);
     }
 
     public void setTemporaryAura(Player player, AuraConfig config, int durationSeconds) {
@@ -84,6 +87,7 @@ public class AuraManager {
         }
 
         spawnAuraDisplay(player, config);
+        config.getWhenApplied().execute(player);
 
         BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             temporaryTasks.remove(uuid);
@@ -98,14 +102,21 @@ public class AuraManager {
         UUID uuid = player.getUniqueId();
         clearTempTask(uuid);
 
+        String tempSavedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
+        if (tempSavedId != null) {
+            AuraConfig tempConfig = plugin.getAuraConfigs().get(tempSavedId.toLowerCase());
+            if (tempConfig != null) tempConfig.getWhenDisabled().execute(player);
+        }
+
         String previousAuraId = hijackedAuraBackups.remove(uuid);
         if (previousAuraId != null) {
             player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, previousAuraId);
             AuraConfig oldConfig = plugin.getAuraConfigs().get(previousAuraId.toLowerCase());
             if (oldConfig != null) {
                 spawnAuraDisplay(player, oldConfig);
+                oldConfig.getWhenApplied().execute(player);
             } else {
-                removeAura(player);
+                removeAuraDisplayOnly(player);
             }
         } else {
             removeAura(player);
@@ -120,6 +131,14 @@ public class AuraManager {
     }
 
     public void removeAura(Player player) {
+        String savedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
+        if (savedId != null) {
+            AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
+            if (config != null) {
+                config.getWhenDisabled().execute(player);
+            }
+        }
+
         clearTempTask(player.getUniqueId());
         hijackedAuraBackups.remove(player.getUniqueId());
         player.getPersistentDataContainer().remove(playerAuraPdcKey);
@@ -197,7 +216,6 @@ public class AuraManager {
         player.addPassenger(display);
         activeAuras.put(uuid, display);
 
-        // Apply personal visibility preferences for online viewers (Fix 3)
         for (Player online : Bukkit.getOnlinePlayers()) {
             if (auraVisibilityDisabled.contains(online.getUniqueId())) {
                 online.hideEntity(plugin, display);
