@@ -37,6 +37,10 @@ public class AuraManager {
         this.playerAuraPdcKey = new NamespacedKey(plugin, "selected_aura_id");
     }
 
+    public NamespacedKey getPlayerAuraPdcKey() {
+        return playerAuraPdcKey;
+    }
+
     public void setAura(Player player, AuraConfig config) {
         clearTempTask(player.getUniqueId());
         hijackedAuraBackups.remove(player.getUniqueId());
@@ -58,7 +62,7 @@ public class AuraManager {
 
         BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             temporaryTasks.remove(uuid);
-            if (!player.isOnline()) return; // Fix 1: Prevent operations on offline players
+            if (!player.isOnline()) return;
             revertTemporaryAura(player);
         }, durationSeconds * 20L);
 
@@ -97,7 +101,6 @@ public class AuraManager {
         removeAuraDisplayOnly(player);
     }
 
-    // Fix 1 & Fix 4: Comprehensive cleanup on disconnect to eliminate memory and task leaks
     public void handlePlayerQuit(Player player) {
         UUID uuid = player.getUniqueId();
         clearTempTask(uuid);
@@ -170,7 +173,6 @@ public class AuraManager {
 
         if (frames.size() > 1) {
             BukkitTask animTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-                // Fix 3: Check player online status first before entity validity to avoid concurrency issues
                 if (!player.isOnline() || !display.isValid()) {
                     stopAnimation(uuid);
                     return;
