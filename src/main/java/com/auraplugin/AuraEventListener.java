@@ -74,8 +74,6 @@ public class AuraEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityMount(EntityMountEvent event) {
-        // Ensures we only remove the aura when the PLAYER mounts something (like a horse),
-        // not when the ItemDisplay mounts the player.
         if (event.getEntity() instanceof Player player) {
             manager.removeAuraDisplayOnly(player);
         }
