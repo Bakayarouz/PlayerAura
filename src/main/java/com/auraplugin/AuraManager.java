@@ -1,6 +1,6 @@
 package com.auraplugin;
 
-import org.bukkit.Color;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Display;
@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
@@ -39,6 +40,14 @@ public class AuraManager {
     }
 
     public void reapplyStoredAura(Player player) {
+        // Halt spawning if player is in an incompatible state
+        if (player.isInsideVehicle() 
+                || player.isSleeping() 
+                || player.getGameMode() == GameMode.SPECTATOR 
+                || player.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
+            return;
+        }
+
         String savedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
         if (savedId == null) return;
 
@@ -48,12 +57,15 @@ public class AuraManager {
         }
     }
 
+    public void hideAuraForInvisibility(Player player) {
+        removeAuraDisplayOnly(player);
+    }
+
     private void spawnAuraDisplay(Player player, AuraConfig config) {
         removeAuraDisplayOnly(player);
 
-        // 1. Prepare location: Use body location and strip pitch so it mounts perfectly upright
         Location spawnLoc = player.getLocation().clone();
-        spawnLoc.setPitch(0); // Flattens pitch at the exact moment of mounting
+        spawnLoc.setPitch(0); // Flatten pitch angle prior to mounting
 
         ItemStack item = new ItemStack(config.getMaterial());
         ItemMeta meta = item.getItemMeta();
@@ -65,23 +77,19 @@ public class AuraManager {
         ItemDisplay display = player.getWorld().spawn(spawnLoc, ItemDisplay.class, entity -> {
             entity.setItemStack(item);
             entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
-            
-            // 2. Billboard VERTICAL keeps the face perpendicular to the horizon
             entity.setBillboard(Display.Billboard.VERTICAL);
             entity.setBrightness(new Display.Brightness(15, 15));
             entity.setShadowRadius(0.0f);
 
-            // 3. Set transformation matrix offset and scale
             Transformation transform = new Transformation(
                     new Vector3f(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ()),
-                    new AxisAngle4f(0.0f, 0.0f, 1.0f, 0.0f),
+                    new AxisAngle4f(0, 0, 1, 0),
                     new Vector3f(config.getScale(), config.getScale(), config.getScale()),
-                    new AxisAngle4f(0.0f, 0.0f, 1.0f, 0.0f)
+                    new AxisAngle4f(0, 0, 1, 0)
             );
             entity.setTransformation(transform);
         });
 
-        // 4. Mount as passenger
         player.addPassenger(display);
         activeAuras.put(player.getUniqueId(), display);
     }
