@@ -33,6 +33,7 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
 
         String subAction = args[0].toLowerCase();
 
+        // Toggle is open to all players with basic permission
         if (subAction.equals("toggle")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage(msg.get("commands.player-only"));
@@ -56,11 +57,13 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        // All other actions (set, remove, temp, reload) are strictly admin / op only
+        if (!sender.hasPermission("aura.admin")) {
+            sender.sendMessage(msg.get("commands.no-permission"));
+            return true;
+        }
+
         if (subAction.equals("reload")) {
-            if (!sender.hasPermission("aura.admin")) {
-                sender.sendMessage(msg.get("commands.no-permission"));
-                return true;
-            }
             plugin.reloadAuraConfig();
             sender.sendMessage(msg.get("commands.reloaded"));
             return true;
@@ -103,23 +106,12 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
                 }
 
                 placeholders.put("aura", config.getId());
-                boolean bypass = sender.hasPermission("aura.admin") || sender.equals(target);
-                if (!bypass && !target.hasPermission(config.getPermission())) {
-                    sender.sendMessage(msg.get("commands.no-permission"));
-                    return true;
-                }
-
                 plugin.getAuraManager().setAura(target, config);
                 sender.sendMessage(msg.get("actions.aura-set-sender", placeholders));
                 return true;
             }
 
             if (subAction.equals("temp")) {
-                if (!sender.hasPermission("aura.admin")) {
-                    sender.sendMessage(msg.get("commands.no-permission"));
-                    return true;
-                }
-
                 if (args.length < 4) {
                     sender.sendMessage(msg.get("commands.usage"));
                     return true;
@@ -158,11 +150,11 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            completions.add("set");
-            completions.add("remove");
-            completions.add("temp");
             completions.add("toggle");
             if (sender.hasPermission("aura.admin")) {
+                completions.add("set");
+                completions.add("remove");
+                completions.add("temp");
                 completions.add("reload");
             }
         } else if (args.length == 2) {
@@ -170,12 +162,12 @@ public class AuraCommand implements CommandExecutor, TabCompleter {
                 completions.add("self");
                 completions.add("others");
                 completions.add("all");
-            } else if (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("temp")) {
+            } else if (sender.hasPermission("aura.admin") && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("remove") || args[0].equalsIgnoreCase("temp"))) {
                 for (Player p : Bukkit.getOnlinePlayers()) {
                     completions.add(p.getName());
                 }
             }
-        } else if (args.length == 3 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("temp"))) {
+        } else if (sender.hasPermission("aura.admin") && args.length == 3 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("temp"))) {
             completions.addAll(plugin.getAuraConfigs().keySet());
         }
 
