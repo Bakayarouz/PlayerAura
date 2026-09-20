@@ -1,6 +1,9 @@
 package com.auraplugin;
 
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -40,6 +43,21 @@ public class AuraPlugin extends JavaPlugin {
                 ConfigurationSection auraSec = section.getConfigurationSection(key);
                 if (auraSec != null) {
                     auraConfigs.put(key.toLowerCase(), new AuraConfig(key, auraSec));
+                }
+            }
+        }
+
+        // Sweep and clean up stale PDC references for currently online players
+        if (auraManager != null) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                String savedId = player.getPersistentDataContainer().get(auraManager.getPlayerAuraPdcKey(), PersistentDataType.STRING);
+                if (savedId != null) {
+                    if (!auraConfigs.containsKey(savedId.toLowerCase())) {
+                        auraManager.removeAura(player);
+                        player.sendMessage("§eYour aura was removed because its configuration was deleted.");
+                    } else {
+                        auraManager.reapplyStoredAura(player);
+                    }
                 }
             }
         }
