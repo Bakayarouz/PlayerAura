@@ -30,7 +30,6 @@ public class AuraConfig {
             }
         }
         
-        // Fallback to single item-model if frames list is empty/missing
         if (frames.isEmpty()) {
             String modelStr = section.getString("item-model", null);
             if (modelStr != null) {
