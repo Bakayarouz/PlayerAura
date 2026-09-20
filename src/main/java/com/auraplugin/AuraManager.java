@@ -1,7 +1,6 @@
 package com.auraplugin;
 
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Display;
@@ -10,304 +9,221 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class AuraManager {
 
     private final AuraPlugin plugin;
-    private final NamespacedKey playerAuraPdcKey;
+    private final NamespacedKey auraPdcKey;
+    
     private final Map<UUID, ItemDisplay> activeAuras = new HashMap<>();
-    private final Map<UUID, BukkitTask> temporaryTasks = new HashMap<>();
-    private final Map<UUID, String> hijackedAuraBackups = new HashMap<>();
-    
     private final Map<UUID, BukkitTask> animationTasks = new HashMap<>();
-    private final Map<UUID, Integer> frameIndices = new HashMap<>();
+    private final Map<UUID, BukkitTask> expirationTasks = new HashMap<>();
     
-    private final Set<UUID> selfAuraHidden = new HashSet<>();
-    private final Set<UUID> otherAurasHidden = new HashSet<>();
+    private final Map<UUID, Boolean> hideSelf = new HashMap<>();
+    private final Map<UUID, Boolean> hideOthers = new HashMap<>();
 
     public AuraManager(AuraPlugin plugin) {
         this.plugin = plugin;
-        this.playerAuraPdcKey = new NamespacedKey(plugin, "selected_aura_id");
+        this.auraPdcKey = new NamespacedKey(plugin, "active_aura");
     }
 
-    NamespacedKey getPlayerAuraPdcKey() {
-        return playerAuraPdcKey;
+    public NamespacedKey getPlayerAuraPdcKey() {
+        return auraPdcKey;
+    }
+
+    public void setAura(Player player, AuraConfig config) {
+        removeAura(player, false);
+
+        UUID uuid = player.getUniqueId();
+        player.getPersistentDataContainer().set(auraPdcKey, PersistentDataType.STRING, config.getId());
+
+        Location loc = player.getLocation().add(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ());
+        
+        ItemDisplay display = player.getWorld().spawn(loc, ItemDisplay.class, entity -> {
+            entity.setPersistent(false); // Safeguard: prevents orphan entities on crash
+            entity.setBillboard(config.getBillboard());
+            entity.setTransformation(new Transformation(
+                    new Vector3f(0, 0, 0),
+                    new AxisAngle4f(0, 0, 0, 1),
+                    new Vector3f(config.getScale(), config.getScale(), config.getScale()),
+                    new AxisAngle4f(0, 0, 0, 1)
+            ));
+        });
+
+        updateDisplayItem(display, config, 0);
+        activeAuras.put(uuid, display);
+
+        if (config.getFrames().size() > 1) {
+            BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, new Runnable() {
+                int frameIndex = 0;
+                @Override
+                public void run() {
+                    if (!player.isOnline() || !activeAuras.containsKey(uuid)) {
+                        cancel();
+                        return;
+                    }
+                    frameIndex = (frameIndex + 1) % config.getFrames().size();
+                    updateDisplayItem(display, config, frameIndex);
+                }
+            }, config.getFrameDelay(), config.getFrameDelay());
+            animationTasks.put(uuid, task);
+        }
+
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            if (!player.isOnline() || !activeAuras.containsKey(uuid)) {
+                task.cancel();
+                return;
+            }
+            Location targetLoc = player.getLocation().add(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ());
+            display.teleport(targetLoc);
+        }, 0L, 1L);
+        
+        config.getWhenApplied().execute(player);
+    }
+
+    public void setTemporaryAura(Player player, AuraConfig config, int seconds) {
+        setAura(player, config);
+        UUID uuid = player.getUniqueId();
+        
+        if (expirationTasks.containsKey(uuid)) {
+            expirationTasks.get(uuid).cancel();
+        }
+
+        BukkitTask expTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                removeAura(player);
+                player.sendMessage(plugin.getMessageManager().get("actions.aura-expired"));
+            }
+        }, seconds * 20L);
+
+        expirationTasks.put(uuid, expTask);
+    }
+
+    public void removeAura(Player player) {
+        removeAura(player, true);
+    }
+
+    private void removeAura(Player player, boolean clearPdc) {
+        UUID uuid = player.getUniqueId();
+        if (clearPdc) {
+            player.getPersistentDataContainer().remove(auraPdcKey);
+        }
+
+        if (activeAuras.containsKey(uuid)) {
+            activeAuras.get(uuid).remove();
+            activeAuras.remove(uuid);
+        }
+
+        if (animationTasks.containsKey(uuid)) {
+            animationTasks.get(uuid).cancel();
+            animationTasks.remove(uuid);
+        }
+
+        if (expirationTasks.containsKey(uuid)) {
+            expirationTasks.get(uuid).cancel();
+            expirationTasks.remove(uuid);
+        }
+    }
+
+    public void removeAllAuras() {
+        for (UUID uuid : activeAuras.keySet()) {
+            ItemDisplay display = activeAuras.get(uuid);
+            if (display != null) display.remove();
+        }
+        activeAuras.clear();
+        for (BukkitTask task : animationTasks.values()) task.cancel();
+        animationTasks.clear();
+        for (BukkitTask task : expirationTasks.values()) task.cancel();
+        expirationTasks.clear();
+    }
+
+    public void validateActiveAurasOnReload() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            String savedId = player.getPersistentDataContainer().get(auraPdcKey, PersistentDataType.STRING);
+            if (savedId != null) {
+                AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
+                if (config == null) {
+                    removeAura(player);
+                    player.sendMessage(plugin.getMessageManager().get("errors.aura-removed-by-reload"));
+                } else {
+                    setAura(player, config);
+                }
+            }
+        }
+    }
+
+    private void updateDisplayItem(ItemDisplay display, AuraConfig config, int frameIndex) {
+        if (display.isDead()) return;
+        NamespacedKey modelKey = config.getFrames().get(frameIndex);
+        ItemStack item = new ItemStack(config.getMaterial());
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setItemModel(modelKey);
+            item.setItemMeta(meta);
+        }
+        display.setItemStack(item);
     }
 
     public boolean toggleSelf(Player player) {
         UUID uuid = player.getUniqueId();
+        boolean current = hideSelf.getOrDefault(uuid, false);
+        boolean next = !current;
+        hideSelf.put(uuid, next);
+        
         ItemDisplay display = activeAuras.get(uuid);
-        boolean hidden;
-        if (selfAuraHidden.contains(uuid)) {
-            selfAuraHidden.remove(uuid);
-            hidden = false;
-            if (display != null && display.isValid()) {
-                player.showEntity(plugin, display);
-            }
-        } else {
-            selfAuraHidden.add(uuid);
-            hidden = true;
-            if (display != null && display.isValid()) {
-                player.hideEntity(plugin, display);
-            }
+        if (display != null) {
+            if (next) player.hideEntity(plugin, display);
+            else player.showEntity(plugin, display);
         }
-        return hidden;
+        return next;
     }
 
     public boolean toggleOthers(Player player) {
         UUID uuid = player.getUniqueId();
-        boolean hidden;
-        if (otherAurasHidden.contains(uuid)) {
-            otherAurasHidden.remove(uuid);
-            hidden = false;
-            for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
-                if (!entry.getKey().equals(uuid) && entry.getValue().isValid()) {
-                    player.showEntity(plugin, entry.getValue());
-                }
-            }
-        } else {
-            otherAurasHidden.add(uuid);
-            hidden = true;
-            for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
-                if (!entry.getKey().equals(uuid) && entry.getValue().isValid()) {
-                    player.hideEntity(plugin, entry.getValue());
-                }
+        boolean current = hideOthers.getOrDefault(uuid, false);
+        boolean next = !current;
+        hideOthers.put(uuid, next);
+
+        for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
+            if (!entry.getKey().equals(uuid)) {
+                ItemDisplay display = entry.getValue();
+                if (next) player.hideEntity(plugin, display);
+                else player.showEntity(plugin, display);
             }
         }
-        return hidden;
+        return next;
     }
 
     public boolean toggleAll(Player player) {
         UUID uuid = player.getUniqueId();
-        boolean anyVisible = !selfAuraHidden.contains(uuid) || !otherAurasHidden.contains(uuid);
-        if (anyVisible) {
-            if (!selfAuraHidden.contains(uuid)) toggleSelf(player);
-            if (!otherAurasHidden.contains(uuid)) toggleOthers(player);
-            return true; // all hidden
-        } else {
-            if (selfAuraHidden.contains(uuid)) toggleSelf(player);
-            if (otherAurasHidden.contains(uuid)) toggleOthers(player);
-            return false; // all visible
-        }
-    }
+        boolean selfHidden = hideSelf.getOrDefault(uuid, false);
+        boolean othersHidden = hideOthers.getOrDefault(uuid, false);
+        boolean targetState = !(selfHidden && othersHidden);
 
-    public void setAura(Player player, AuraConfig newConfig) {
-        String oldSavedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-        if (oldSavedId != null) {
-            AuraConfig oldConfig = plugin.getAuraConfigs().get(oldSavedId.toLowerCase());
-            if (oldConfig != null && !oldConfig.getId().equals(newConfig.getId())) {
-                oldConfig.getWhenDisabled().execute(player);
+        hideSelf.put(uuid, targetState);
+        hideOthers.put(uuid, targetState);
+
+        ItemDisplay myDisplay = activeAuras.get(uuid);
+        if (myDisplay != null) {
+            if (targetState) player.hideEntity(plugin, myDisplay);
+            else player.showEntity(plugin, myDisplay);
+        }
+
+        for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
+            if (!entry.getKey().equals(uuid)) {
+                ItemDisplay display = entry.getValue();
+                if (targetState) player.hideEntity(plugin, display);
+                else player.showEntity(plugin, display);
             }
         }
-
-        clearTempTask(player.getUniqueId());
-        hijackedAuraBackups.remove(player.getUniqueId());
-
-        player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, newConfig.getId());
-        spawnAuraDisplay(player, newConfig);
-        newConfig.getWhenApplied().execute(player);
-    }
-
-    public void setTemporaryAura(Player player, AuraConfig config, int durationSeconds) {
-        UUID uuid = player.getUniqueId();
-        clearTempTask(uuid);
-
-        if (!hijackedAuraBackups.containsKey(uuid)) {
-            String currentSaved = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-            hijackedAuraBackups.put(uuid, currentSaved);
-        }
-
-        spawnAuraDisplay(player, config);
-        config.getWhenApplied().execute(player);
-
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            temporaryTasks.remove(uuid);
-            if (!player.isOnline()) return;
-            revertTemporaryAura(player);
-        }, durationSeconds * 20L);
-
-        temporaryTasks.put(uuid, task);
-    }
-
-    public void revertTemporaryAura(Player player) {
-        UUID uuid = player.getUniqueId();
-        clearTempTask(uuid);
-
-        String tempSavedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-        if (tempSavedId != null) {
-            AuraConfig tempConfig = plugin.getAuraConfigs().get(tempSavedId.toLowerCase());
-            if (tempConfig != null) tempConfig.getWhenDisabled().execute(player);
-        }
-
-        String previousAuraId = hijackedAuraBackups.remove(uuid);
-        if (previousAuraId != null) {
-            player.getPersistentDataContainer().set(playerAuraPdcKey, PersistentDataType.STRING, previousAuraId);
-            AuraConfig oldConfig = plugin.getAuraConfigs().get(previousAuraId.toLowerCase());
-            if (oldConfig != null) {
-                spawnAuraDisplay(player, oldConfig);
-                oldConfig.getWhenApplied().execute(player);
-            } else {
-                removeAuraDisplayOnly(player);
-            }
-        } else {
-            removeAura(player);
-        }
-    }
-
-    private void clearTempTask(UUID uuid) {
-        BukkitTask task = temporaryTasks.remove(uuid);
-        if (task != null) {
-            task.cancel();
-        }
-    }
-
-    public void removeAura(Player player) {
-        String savedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-        if (savedId != null) {
-            AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
-            if (config != null) {
-                config.getWhenDisabled().execute(player);
-            }
-        }
-
-        clearTempTask(player.getUniqueId());
-        hijackedAuraBackups.remove(player.getUniqueId());
-        player.getPersistentDataContainer().remove(playerAuraPdcKey);
-        removeAuraDisplayOnly(player);
-    }
-
-    public void handlePlayerQuit(Player player) {
-        UUID uuid = player.getUniqueId();
-        clearTempTask(uuid);
-        hijackedAuraBackups.remove(uuid);
-        selfAuraHidden.remove(uuid);
-        otherAurasHidden.remove(uuid);
-        stopAnimation(uuid);
-        removeAuraDisplayOnly(player);
-    }
-
-    public void reapplyStoredAura(Player player) {
-        if (temporaryTasks.containsKey(player.getUniqueId())) return;
-
-        if (player.isInsideVehicle() 
-                || player.isSleeping() 
-                || player.getGameMode() == GameMode.SPECTATOR 
-                || player.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
-            return;
-        }
-
-        String savedId = player.getPersistentDataContainer().get(playerAuraPdcKey, PersistentDataType.STRING);
-        if (savedId == null) return;
-
-        AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
-        if (config != null && player.hasPermission(config.getPermission())) {
-            spawnAuraDisplay(player, config);
-        }
-    }
-
-    public void hideAuraForInvisibility(Player player) {
-        removeAuraDisplayOnly(player);
-    }
-
-    private void spawnAuraDisplay(Player player, AuraConfig config) {
-        removeAuraDisplayOnly(player);
-
-        UUID uuid = player.getUniqueId();
-        List<NamespacedKey> frames = config.getFrames();
-        if (frames.isEmpty()) return;
-
-        Location spawnLoc = player.getLocation().clone();
-        spawnLoc.setPitch(0);
-
-        frameIndices.put(uuid, 0);
-        NamespacedKey initialModel = frames.get(0);
-
-        ItemStack item = new ItemStack(config.getMaterial());
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null && initialModel != null) {
-            meta.setItemModel(initialModel);
-            item.setItemMeta(meta);
-        }
-
-        ItemDisplay display = player.getWorld().spawn(spawnLoc, ItemDisplay.class, entity -> {
-            entity.setItemStack(item);
-            entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.HEAD);
-            entity.setBillboard(config.getBillboard());
-            entity.setBrightness(new Display.Brightness(15, 15));
-            entity.setShadowRadius(0.0f);
-
-            Transformation transform = new Transformation(
-                    new Vector3f(config.getOffsetX(), config.getOffsetY(), config.getOffsetZ()),
-                    new AxisAngle4f(0, 0, 1, 0),
-                    new Vector3f(config.getScale(), config.getScale(), config.getScale()),
-                    new AxisAngle4f(0, 0, 1, 0)
-            );
-            entity.setTransformation(transform);
-        });
-
-        player.addPassenger(display);
-        activeAuras.put(uuid, display);
-
-        if (selfAuraHidden.contains(uuid)) {
-            player.hideEntity(plugin, display);
-        }
-
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            if (!online.getUniqueId().equals(uuid) && otherAurasHidden.contains(online.getUniqueId())) {
-                online.hideEntity(plugin, display);
-            }
-        }
-
-        if (frames.size() > 1) {
-            BukkitTask animTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-                if (!player.isOnline() || !display.isValid()) {
-                    stopAnimation(uuid);
-                    return;
-                }
-
-                int currentIndex = frameIndices.getOrDefault(uuid, 0);
-                currentIndex = (currentIndex + 1) % frames.size();
-                frameIndices.put(uuid, currentIndex);
-
-                NamespacedKey nextModel = frames.get(currentIndex);
-                ItemStack stack = display.getItemStack();
-                if (stack != null) {
-                    ItemMeta im = stack.getItemMeta();
-                    if (im != null) {
-                        im.setItemModel(nextModel);
-                        stack.setItemMeta(im);
-                        display.setItemStack(stack);
-                    }
-                }
-            }, config.getFrameDelay(), config.getFrameDelay());
-
-            animationTasks.put(uuid, animTask);
-        }
-    }
-
-    private void stopAnimation(UUID uuid) {
-        BukkitTask task = animationTasks.remove(uuid);
-        if (task != null) {
-            task.cancel();
-        }
-        frameIndices.remove(uuid);
-    }
-
-    public void removeAuraDisplayOnly(Player player) {
-        UUID uuid = player.getUniqueId();
-        stopAnimation(uuid);
-
-        ItemDisplay display = activeAuras.remove(uuid);
-        if (display != null && display.isValid()) {
-            player.removePassenger(display);
-            display.remove();
-        }
+        return targetState;
     }
 }
