@@ -28,7 +28,9 @@ public class AuraManager {
     
     private final Map<UUID, BukkitTask> animationTasks = new HashMap<>();
     private final Map<UUID, Integer> frameIndices = new HashMap<>();
-    private final Set<UUID> auraVisibilityDisabled = new HashSet<>();
+    
+    private final Set<UUID> selfAuraHidden = new HashSet<>();
+    private final Set<UUID> otherAurasHidden = new HashSet<>();
 
     public AuraManager(AuraPlugin plugin) {
         this.plugin = plugin;
@@ -39,24 +41,60 @@ public class AuraManager {
         return playerAuraPdcKey;
     }
 
-    public boolean toggleAuraVisibility(Player player) {
+    public boolean toggleSelf(Player player) {
         UUID uuid = player.getUniqueId();
-        if (auraVisibilityDisabled.contains(uuid)) {
-            auraVisibilityDisabled.remove(uuid);
-            for (ItemDisplay display : activeAuras.values()) {
-                if (display.isValid()) {
-                    player.showEntity(plugin, display);
-                }
+        ItemDisplay display = activeAuras.get(uuid);
+        boolean hidden;
+        if (selfAuraHidden.contains(uuid)) {
+            selfAuraHidden.remove(uuid);
+            hidden = false;
+            if (display != null && display.isValid()) {
+                player.showEntity(plugin, display);
             }
-            return true;
         } else {
-            auraVisibilityDisabled.add(uuid);
-            for (ItemDisplay display : activeAuras.values()) {
-                if (display.isValid()) {
-                    player.hideEntity(plugin, display);
+            selfAuraHidden.add(uuid);
+            hidden = true;
+            if (display != null && display.isValid()) {
+                player.hideEntity(plugin, display);
+            }
+        }
+        return hidden;
+    }
+
+    public boolean toggleOthers(Player player) {
+        UUID uuid = player.getUniqueId();
+        boolean hidden;
+        if (otherAurasHidden.contains(uuid)) {
+            otherAurasHidden.remove(uuid);
+            hidden = false;
+            for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
+                if (!entry.getKey().equals(uuid) && entry.getValue().isValid()) {
+                    player.showEntity(plugin, entry.getValue());
                 }
             }
-            return false;
+        } else {
+            otherAurasHidden.add(uuid);
+            hidden = true;
+            for (Map.Entry<UUID, ItemDisplay> entry : activeAuras.entrySet()) {
+                if (!entry.getKey().equals(uuid) && entry.getValue().isValid()) {
+                    player.hideEntity(plugin, entry.getValue());
+                }
+            }
+        }
+        return hidden;
+    }
+
+    public boolean toggleAll(Player player) {
+        UUID uuid = player.getUniqueId();
+        boolean anyVisible = !selfAuraHidden.contains(uuid) || !otherAurasHidden.contains(uuid);
+        if (anyVisible) {
+            if (!selfAuraHidden.contains(uuid)) toggleSelf(player);
+            if (!otherAurasHidden.contains(uuid)) toggleOthers(player);
+            return true; // all hidden
+        } else {
+            if (selfAuraHidden.contains(uuid)) toggleSelf(player);
+            if (otherAurasHidden.contains(uuid)) toggleOthers(player);
+            return false; // all visible
         }
     }
 
@@ -149,7 +187,8 @@ public class AuraManager {
         UUID uuid = player.getUniqueId();
         clearTempTask(uuid);
         hijackedAuraBackups.remove(uuid);
-        auraVisibilityDisabled.remove(uuid);
+        selfAuraHidden.remove(uuid);
+        otherAurasHidden.remove(uuid);
         stopAnimation(uuid);
         removeAuraDisplayOnly(player);
     }
@@ -216,8 +255,12 @@ public class AuraManager {
         player.addPassenger(display);
         activeAuras.put(uuid, display);
 
+        if (selfAuraHidden.contains(uuid)) {
+            player.hideEntity(plugin, display);
+        }
+
         for (Player online : Bukkit.getOnlinePlayers()) {
-            if (auraVisibilityDisabled.contains(online.getUniqueId())) {
+            if (!online.getUniqueId().equals(uuid) && otherAurasHidden.contains(online.getUniqueId())) {
                 online.hideEntity(plugin, display);
             }
         }
