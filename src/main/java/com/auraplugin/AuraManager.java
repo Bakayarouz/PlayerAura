@@ -16,10 +16,7 @@ import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class AuraManager {
 
@@ -31,14 +28,42 @@ public class AuraManager {
     
     private final Map<UUID, BukkitTask> animationTasks = new HashMap<>();
     private final Map<UUID, Integer> frameIndices = new HashMap<>();
+    
+    // Tracks players who have toggled off seeing auras (Fix 3)
+    private final Set<UUID> auraVisibilityDisabled = new HashSet<>();
 
     public AuraManager(AuraPlugin plugin) {
         this.plugin = plugin;
         this.playerAuraPdcKey = new NamespacedKey(plugin, "selected_aura_id");
     }
 
-    public NamespacedKey getPlayerAuraPdcKey() {
+    NamespacedKey getPlayerAuraPdcKey() {
         return playerAuraPdcKey;
+    }
+
+    /**
+     * Toggles whether a player can see other players' auras. (Fix 3)
+     * @return true if auras are now visible, false if hidden.
+     */
+    public boolean toggleAuraVisibility(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (auraVisibilityDisabled.contains(uuid)) {
+            auraVisibilityDisabled.remove(uuid);
+            for (ItemDisplay display : activeAuras.values()) {
+                if (display.isValid()) {
+                    player.showEntity(plugin, display);
+                }
+            }
+            return true;
+        } else {
+            auraVisibilityDisabled.add(uuid);
+            for (ItemDisplay display : activeAuras.values()) {
+                if (display.isValid()) {
+                    player.hideEntity(plugin, display);
+                }
+            }
+            return false;
+        }
     }
 
     public void setAura(Player player, AuraConfig config) {
@@ -105,6 +130,7 @@ public class AuraManager {
         UUID uuid = player.getUniqueId();
         clearTempTask(uuid);
         hijackedAuraBackups.remove(uuid);
+        auraVisibilityDisabled.remove(uuid);
         stopAnimation(uuid);
         removeAuraDisplayOnly(player);
     }
@@ -170,6 +196,13 @@ public class AuraManager {
 
         player.addPassenger(display);
         activeAuras.put(uuid, display);
+
+        // Apply personal visibility preferences for online viewers (Fix 3)
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (auraVisibilityDisabled.contains(online.getUniqueId())) {
+                online.hideEntity(plugin, display);
+            }
+        }
 
         if (frames.size() > 1) {
             BukkitTask animTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
