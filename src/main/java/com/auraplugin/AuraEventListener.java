@@ -1,14 +1,16 @@
 package com.auraplugin;
 
-import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDismountEvent;
+import org.bukkit.event.entity.EntityMountEvent;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.*;
+import org.bukkit.potion.PotionEffectType;
 
 public class AuraEventListener implements Listener {
 
@@ -20,41 +22,81 @@ public class AuraEventListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        // Delay by 2 ticks so player position and chunks fully initialize
-        delayReapply(event.getPlayer(), 2L);
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        manager.reapplyStoredAura(event.getPlayer());
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        // Despawn entity on leave (Player PDC retains saved selection)
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
         manager.removeAuraDisplayOnly(event.getPlayer());
     }
 
-    @EventHandler
-    public void onDeath(PlayerDeathEvent event) {
-        // Despawn entity immediately on death so it doesn't float over the corpse
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDeath(PlayerDeathEvent event) {
         manager.removeAuraDisplayOnly(event.getEntity());
     }
 
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        // Re-mount display entity 2 ticks after respawning at bed/spawnpoint
-        delayReapply(event.getPlayer(), 2L);
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            manager.reapplyStoredAura(event.getPlayer());
+        });
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onWorldChange(PlayerChangedWorldEvent event) {
-        // Passengers dismount during cross-dimension teleports (Nether/End); re-mount after switch
-        delayReapply(event.getPlayer(), 2L);
+        manager.removeAuraDisplayOnly(event.getPlayer());
+        manager.reapplyStoredAura(event.getPlayer());
     }
 
-    private void delayReapply(Player player, long delayTicks) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                manager.reapplyStoredAura(player);
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onGameModeChange(PlayerGameModeChangeEvent event) {
+        Player player = event.getPlayer();
+        if (event.getNewGameMode() == GameMode.SPECTATOR) {
+            manager.removeAuraDisplayOnly(player);
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin, () -> manager.reapplyStoredAura(player));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPotionEffect(EntityPotionEffectEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+
+        if (event.getModifiedType().equals(PotionEffectType.INVISIBILITY)) {
+            switch (event.getAction()) {
+                case ADDED, CHANGED -> manager.hideAuraForInvisibility(player);
+                case REMOVED, CLEARED -> manager.reapplyStoredAura(player);
             }
-        }, delayTicks);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityMount(EntityMountEvent event) {
+        // Ensures we only remove the aura when the PLAYER mounts something (like a horse),
+        // not when the ItemDisplay mounts the player.
+        if (event.getEntity() instanceof Player player) {
+            manager.removeAuraDisplayOnly(player);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDismount(EntityDismountEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> manager.reapplyStoredAura(player));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBedEnter(PlayerBedEnterEvent event) {
+        if (event.getBedEnterResult() == PlayerBedEnterEvent.BedEnterResult.OK) {
+            manager.removeAuraDisplayOnly(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBedLeave(PlayerBedLeaveEvent event) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> manager.reapplyStoredAura(event.getPlayer()));
     }
 }
