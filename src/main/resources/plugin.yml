@@ -1,0 +1,7 @@
+name: PlayerAura
+version: 1.0.0
+main: com.auraplugin.AuraPlugin
+api-version: '1.21'
+commands:
+  aura:
+    description: Manage your player aura
