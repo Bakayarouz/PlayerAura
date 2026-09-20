@@ -1,9 +1,29 @@
 auras:
-  fire_ring:
-    display-name: "&c&lFire Ring"
+  # Static single-model aura example
+  halo:
     material: PAPER
-    item-model: "my_pack:fire_ring" # 1.21 String Data Component
+    item-model: "minecraft:halo_model"
+    permission: "aura.use.halo"
+    scale: 1.0
+    offset:
+      x: 0.0
+      y: 0.5
+      z: 0.0
+    billboard: VERTICAL
+
+  # Multi-frame animated aura example
+  spinning_fire:
+    material: PAPER
+    frames:
+      - "minecraft:fire_frame_1"
+      - "minecraft:fire_frame_2"
+      - "minecraft:fire_frame_3"
+      - "minecraft:fire_frame_4"
+    frame-delay: 5 # Switches frames every 5 ticks (4 times a second)
     permission: "aura.use.fire"
-    offset-y: 0.2
     scale: 1.2
-    billboard: "CENTER"
+    offset:
+      x: 0.0
+      y: 0.6
+      z: 0.0
+    billboard: CENTER
