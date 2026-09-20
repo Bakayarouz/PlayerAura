@@ -15,5 +15,9 @@ actions:
   config-deleted-removal: "{prefix}&eYour aura was removed because its configuration was deleted."
   
 toggle:
-  visible: "{prefix}&aAuras are now &evisible &aaround other players."
-  hidden: "{prefix}&eAuras are now &chidden &efrom your view."
+  self-hidden: "{prefix}&eYour own aura is now &chidden &efrom your view."
+  self-visible: "{prefix}&aYour own aura is now &evisible &aeto you."
+  others-hidden: "{prefix}&eOther players' auras are now &chidden &efrom your view."
+  others-visible: "{prefix}&aOther players' auras are now &evisible &ato you."
+  all-hidden: "{prefix}&eAll auras (self & others) are now &chidden."
+  all-visible: "{prefix}&aAll auras (self & others) are now &evisible."
