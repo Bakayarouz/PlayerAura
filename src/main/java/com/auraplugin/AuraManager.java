@@ -29,7 +29,6 @@ public class AuraManager {
     private final Map<UUID, BukkitTask> temporaryTasks = new HashMap<>();
     private final Map<UUID, String> hijackedAuraBackups = new HashMap<>();
     
-    // Animation tracking maps
     private final Map<UUID, BukkitTask> animationTasks = new HashMap<>();
     private final Map<UUID, Integer> frameIndices = new HashMap<>();
 
@@ -59,6 +58,7 @@ public class AuraManager {
 
         BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             temporaryTasks.remove(uuid);
+            if (!player.isOnline()) return; // Fix 1: Prevent operations on offline players
             revertTemporaryAura(player);
         }, durationSeconds * 20L);
 
@@ -97,6 +97,15 @@ public class AuraManager {
         removeAuraDisplayOnly(player);
     }
 
+    // Fix 1 & Fix 4: Comprehensive cleanup on disconnect to eliminate memory and task leaks
+    public void handlePlayerQuit(Player player) {
+        UUID uuid = player.getUniqueId();
+        clearTempTask(uuid);
+        hijackedAuraBackups.remove(uuid);
+        stopAnimation(uuid);
+        removeAuraDisplayOnly(player);
+    }
+
     public void reapplyStoredAura(Player player) {
         if (temporaryTasks.containsKey(player.getUniqueId())) return;
 
@@ -128,7 +137,7 @@ public class AuraManager {
         if (frames.isEmpty()) return;
 
         Location spawnLoc = player.getLocation().clone();
-        spawnLoc.setPitch(0); // Flatten pitch prior to mount
+        spawnLoc.setPitch(0);
 
         frameIndices.put(uuid, 0);
         NamespacedKey initialModel = frames.get(0);
@@ -159,10 +168,10 @@ public class AuraManager {
         player.addPassenger(display);
         activeAuras.put(uuid, display);
 
-        // Start animation loop if there are multiple frames
         if (frames.size() > 1) {
             BukkitTask animTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-                if (!display.isValid() || !player.isOnline()) {
+                // Fix 3: Check player online status first before entity validity to avoid concurrency issues
+                if (!player.isOnline() || !display.isValid()) {
                     stopAnimation(uuid);
                     return;
                 }
