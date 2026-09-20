@@ -32,7 +32,6 @@ public class AuraEventListener implements Listener {
         manager.handlePlayerQuit(event.getPlayer());
     }
 
-    // Fix 4: Immediate cleanup on death to avoid ghost entities or item drop issues
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerDeath(PlayerDeathEvent event) {
         manager.removeAuraDisplayOnly(event.getEntity());
@@ -68,7 +67,6 @@ public class AuraEventListener implements Listener {
         }
     }
 
-    // Fix 1: Instant reaction to invisibility status
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPotionEffect(EntityPotionEffectEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
