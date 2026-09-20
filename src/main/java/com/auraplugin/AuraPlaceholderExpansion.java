@@ -47,6 +47,13 @@ public class AuraPlaceholderExpansion extends PlaceholderExpansion {
             return savedId != null ? savedId : "None";
         }
 
+        if (identifier.equalsIgnoreCase("display_name") || identifier.equalsIgnoreCase("display")) {
+            String savedId = player.getPersistentDataContainer().get(plugin.getAuraManager().getPlayerAuraPdcKey(), PersistentDataType.STRING);
+            if (savedId == null) return "None";
+            AuraConfig config = plugin.getAuraConfigs().get(savedId.toLowerCase());
+            return config != null ? config.getDisplayName() : "None";
+        }
+
         if (identifier.equalsIgnoreCase("has_active")) {
             boolean hasActive = player.getPersistentDataContainer().has(plugin.getAuraManager().getPlayerAuraPdcKey(), PersistentDataType.STRING);
             return String.valueOf(hasActive);
