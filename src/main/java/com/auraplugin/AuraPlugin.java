@@ -21,13 +21,12 @@ public class AuraPlugin extends JavaPlugin {
         getCommand("aura").setExecutor(cmd);
         getCommand("aura").setTabCompleter(cmd);
 
-        // Fixed: Pass 'this' as the first argument to match AuraEventListener(AuraPlugin, AuraManager)
         getServer().getPluginManager().registerEvents(new AuraEventListener(this, auraManager), this);
     }
 
     @Override
     public void onDisable() {
-        // Clean up active entities on plugin disable/reload
+        // Automatically dismounts and removes auras from all online players on server stop/reload
         getServer().getOnlinePlayers().forEach(auraManager::removeAuraDisplayOnly);
     }
 
