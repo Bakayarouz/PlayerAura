@@ -1,6 +1,5 @@
 plugins {
     java
-    id("io.papermc.paperweight.userdev") version "1.7.1"
 }
 
 group = "com.auraplugin"
@@ -17,11 +16,12 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    // Paper API dependency (works across all 1.21.x sub-versions)
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
 }
 
 tasks {
-    build {
-        dependsOn("reobfJar")
+    withType<JavaCompile> {
+        options.encoding = "UTF-8"
     }
 }
