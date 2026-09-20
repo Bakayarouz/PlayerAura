@@ -1,0 +1,9 @@
+auras:
+  fire_ring:
+    display-name: "&c&lFire Ring"
+    material: PAPER
+    item-model: "my_pack:fire_ring" # 1.21 String Data Component
+    permission: "aura.use.fire"
+    offset-y: 0.2
+    scale: 1.2
+    billboard: "CENTER"
