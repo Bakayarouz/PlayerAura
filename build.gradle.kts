@@ -17,7 +17,6 @@ repositories {
 }
 
 dependencies {
-    // Paper API dependency (works across all 1.21.x sub-versions)
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.6")
 }
@@ -25,5 +24,11 @@ dependencies {
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
+    }
+
+    processResources {
+        filesMatching("plugin.yml") {
+            expand("version" to project.version)
+        }
     }
 }
