@@ -7,13 +7,16 @@ commands:
   invalid-aura: "{prefix}&cInvalid aura ID! Available: {auras}"
   invalid-duration: "{prefix}&cDuration must be a valid number of seconds."
   reloaded: "{prefix}&aAura configuration and messages reloaded successfully!"
-  
+
 actions:
   aura-removed-sender: "{prefix}&aRemoved aura from {target}."
   aura-set-sender: "{prefix}&aSuccessfully applied aura '{aura}' to {target}."
   aura-temp-sender: "{prefix}&aApplied temporary aura '{aura}' to {target} for {seconds}s."
-  config-deleted-removal: "{prefix}&eYour aura was removed because its configuration was deleted."
-  
+  aura-expired: "{prefix}&eYour temporary aura has expired."
+
+errors:
+  aura-removed-by-reload: "{prefix}&eYour aura was removed because its configuration was deleted."
+
 toggle:
   self-hidden: "{prefix}&eYour own aura is now &chidden &efrom your view."
   self-visible: "{prefix}&aYour own aura is now &evisible &aeto you."
